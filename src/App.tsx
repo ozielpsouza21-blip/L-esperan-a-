@@ -302,11 +302,24 @@ export default function App() {
       const saved = localStorage.getItem('childrenList');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length >= 18) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, Child>();
+          INITIAL_CHILDREN.forEach(c => map.set(c.id, { ...c }));
+          parsed.forEach((c: Child) => {
+            if (c && c.id) map.set(c.id, { ...(map.get(c.id) || {}), ...c });
+          });
+          return Array.from(map.values());
+        }
       }
     } catch {}
     return INITIAL_CHILDREN;
   });
+
+  // Crianças aprovadas e não arquivadas para exibição pública (Home e Todas as Crianças)
+  const publicChildren = childrenList.filter(c => c.approved !== false && !c.archived);
+  const [adminChildFilter, setAdminChildFilter] = useState<'all' | 'approved' | 'pending' | 'sponsored' | 'waiting'>('all');
+  const [adminChildSearch, setAdminChildSearch] = useState('');
 
   const [profilesList, setProfilesList] = useState<any[]>(() => {
     try {
@@ -403,20 +416,44 @@ export default function App() {
     };
   });
 
-  // Admin & Security Management
-  const [adminName, setAdminName] = useState(() => localStorage.getItem('adminName') || 'Lar Esperan\u00e7a');
-  const [adminTitle, setAdminTitle] = useState(() => localStorage.getItem('adminTitle') || 'Gest\u00e3o');
+  // Admin & Security Management with authentic Supabase Auth (no hardcoded passwords)
+  const [adminName, setAdminName] = useState(() => localStorage.getItem('adminName') || 'Lar Esperança');
+  const [adminTitle, setAdminTitle] = useState(() => localStorage.getItem('adminTitle') || 'Gestão');
   const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem('adminEmail') || 'contato@laresperanca.org');
   const [adminPhone, setAdminPhone] = useState(() => localStorage.getItem('adminPhone') || '(11) 99803-0000');
   const [adminAvatar, setAdminAvatar] = useState(() => localStorage.getItem('adminAvatar') || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop');
-  const [adminBio, setAdminBio] = useState(() => localStorage.getItem('adminBio') || 'Coordena\u00e7\u00e3o oficial do Lar Esperan\u00e7a.');
-  const [adminPin, setAdminPin] = useState(() => localStorage.getItem('adminPin') || '1234');
-  const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem('adminPassword') || 'admin123');
+  const [adminBio, setAdminBio] = useState(() => localStorage.getItem('adminBio') || 'Coordenação oficial do Lar Esperança.');
   const [isSafePanelUnlocked, setIsSafePanelUnlocked] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [securityPasswordInput, setSecurityPasswordInput] = useState('');
   const [securityEmailInput, setSecurityEmailInput] = useState('');
+  const [showSecurityPassword, setShowSecurityPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [adminTab, setAdminTab] = useState<'dashboard' | 'children' | 'padrinhos' | 'familias' | 'gallery' | 'camera' | 'carousel' | 'media916' | 'pix' | 'evangelical' | 'festive' | 'security' | 'profile'>('dashboard');
+
+  // Listen to Supabase Auth state & check active session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setIsSafePanelUnlocked(true);
+      }
+    }).catch(() => {});
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setIsSafePanelUnlocked(true);
+      } else {
+        setCurrentUser(null);
+        setIsSafePanelUnlocked(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // PIX Settings
   const [pixKey, setPixKey] = useState(() => localStorage.getItem('pixKey') || 'doacoes@laresperanca.org');
@@ -435,6 +472,7 @@ export default function App() {
 
   // Modals & Popups State
   const [selectedChildForLetter, setSelectedChildForLetter] = useState<Child | null>(null);
+  const [editingChildForModal, setEditingChildForModal] = useState<Child | null>(null);
   const [selectedChildForCertificate, setSelectedChildForCertificate] = useState<Child | null>(null);
   const [isCertificateOpen, setIsCertificateOpen] = useState(false);
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
@@ -443,6 +481,14 @@ export default function App() {
   const [isLiveCameraOpen, setIsLiveCameraOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<any>('gallery');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(() => {
+    try {
+      const saved = localStorage.getItem('socialLinks');
+      return saved ? JSON.parse(saved) : INITIAL_SOCIAL_LINKS;
+    } catch {
+      return INITIAL_SOCIAL_LINKS;
+    }
+  });
 
   // 3D Splash Screen Intro
   const [isShowingSplash, setIsShowingSplash] = useState(true);
@@ -503,12 +549,42 @@ export default function App() {
               desiredGift,
               shoeSize,
               clothesSize,
-              sponsorName: k.sponsor_name
+              sponsorName: k.sponsor_name,
+              approved: k.approved !== undefined ? k.approved : true,
+              archived: k.archived !== undefined ? k.archived : false
             };
           });
 
-          setChildrenList(mapped);
-          try { localStorage.setItem('childrenList', JSON.stringify(mapped)); } catch {}
+          // Mesclar dados preservando integralmente os 18 registros (14 aprovados + 4 em análise/pendentes)
+          setChildrenList(prev => {
+            const map = new Map<string, Child>();
+            // 1. Base inicial: todos os 18 registros
+            INITIAL_CHILDREN.forEach(c => map.set(c.id, { ...c }));
+            // 2. Sobrepor alterações locais prévias
+            (prev || []).forEach(c => map.set(c.id, { ...(map.get(c.id) || {}), ...c }));
+            // 3. Atualizar com os registros recebidos do Supabase
+            mapped.forEach(mk => {
+              let existingKey = mk.id;
+              if (!map.has(existingKey)) {
+                for (const [k, v] of map.entries()) {
+                  if (v.name?.trim().toLowerCase() === mk.name?.trim().toLowerCase()) {
+                    existingKey = k;
+                    break;
+                  }
+                }
+              }
+              const existing: Partial<Child> = map.get(existingKey) || {};
+              map.set(existingKey, {
+                ...existing,
+                ...mk,
+                approved: mk.approved !== undefined ? mk.approved : (existing.approved !== undefined ? existing.approved : true),
+                archived: mk.archived !== undefined ? mk.archived : (existing.archived !== undefined ? existing.archived : false),
+              } as Child);
+            });
+            const fullList = Array.from(map.values());
+            try { localStorage.setItem('childrenList', JSON.stringify(fullList)); } catch {}
+            return fullList;
+          });
         }
       } catch (e) {
         console.warn('Sync notice:', e);
@@ -555,26 +631,54 @@ export default function App() {
     updateKidInSupabase(childId, { status: 'Apadrinhado' }).catch(() => {});
   };
 
-  // Safe Panel Auth Handler
-  const handleVerifySecurityCredentials = () => {
-    const email = securityEmailInput.trim().toLowerCase();
-    const pass = securityPasswordInput.trim();
+  // Safe Panel Auth Handler via authentic Supabase Auth (no hardcoded passwords)
+  const handleVerifySecurityCredentials = async () => {
+    const email = securityEmailInput.trim();
+    const password = securityPasswordInput.trim();
 
-    if (!email || !pass) {
-      setNotification('Informe seu e-mail e senha.');
+    if (!email || !password) {
+      setAuthError('Informe o e-mail e a senha cadastrados no Supabase.');
+      setNotification('Por favor, informe e-mail e senha.');
       return;
     }
 
-    const isMatch = (pass === adminPassword || pass === adminPin || pass === 'admin123' || pass === '1234');
-    if (isMatch) {
-      setIsSafePanelUnlocked(true);
-      setIsSecurityModalOpen(false);
-      setCurrentScreenIndex(3); // Admin screen
-      setNotification('Painel de Gest\u00e3o Seguro Desbloqueado!');
-      confetti({ particleCount: 50, spread: 60 });
-    } else {
-      setNotification('Senha ou credenciais incorretas.');
+    setAuthLoading(true);
+    setAuthError(null);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setAuthError(`Erro no Supabase Auth: ${error.message}`);
+        setNotification(`Erro ao autenticar: ${error.message}`);
+      } else if (data?.user) {
+        setCurrentUser(data.user);
+        setIsSafePanelUnlocked(true);
+        setIsSecurityModalOpen(false);
+        setSecurityEmailInput('');
+        setSecurityPasswordInput('');
+        setAuthError(null);
+        setCurrentScreenIndex(3); // Admin screen
+        setNotification('Painel de Gestão Seguro Desbloqueado com sucesso!');
+        confetti({ particleCount: 50, spread: 60 });
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Falha ao conectar com o Supabase Auth.');
+      setNotification('Falha ao autenticar.');
+    } finally {
+      setAuthLoading(false);
     }
+  };
+
+  const handleAdminLogout = async () => {
+    await supabase.auth.signOut().catch(() => {});
+    setIsSafePanelUnlocked(false);
+    setCurrentUser(null);
+    setCurrentScreenIndex(0);
+    setNotification('Sessão administrativa encerrada.');
   };
 
   const currentTheme = evangelicalThemes.find(t => t.id === activeEvangelicalThemeId) || evangelicalThemes[0];
@@ -647,7 +751,7 @@ export default function App() {
       />
 
       {/* 5. Main View Router */}
-      <main className="flex-1 w-full max-w-6xl mx-auto px-3.5 sm:px-6 py-4 flex flex-col justify-between">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-3.5 sm:px-6 py-4 flex flex-col justify-between pb-24 sm:pb-28">
         
         {/* ==================== HOME SCREEN ==================== */}
         {currentScreenObj.id === 'home' && (
@@ -686,13 +790,16 @@ export default function App() {
               />
             )}
 
-            {/* Adote uma Cartinha - Children Section */}
+            {/* Adote uma Cartinha - Children Section (Área Pública: Apenas Aprovados, 4 na Home + Botão Ver Todos) */}
             <ChildrenSection 
-              childrenList={childrenList}
+              childrenList={publicChildren}
               onSelectChild={(c) => setSelectedChildForLetter(c)}
               onSponsorChild={handleSponsorChild}
               onZoomImage={setZoomedImage}
               getAgeDisplay={getAgeDisplay}
+              isHome={true}
+              limit={4}
+              onViewAll={() => setCurrentScreenIndex(8)}
             />
 
             {/* Galeria de Fotos em Destaque */}
@@ -781,12 +888,14 @@ export default function App() {
               </button>
               <div>
                 <h2 className="text-lg sm:text-xl font-black text-white">Todas as Cartinhas de Natal</h2>
-                <p className="text-xs text-purple-300">Escolha uma criança para transformar seu Natal</p>
+                <p className="text-xs text-purple-300">
+                  {publicChildren.length} crianças aprovadas para apadrinhamento (de um total de 18 acolhidos pelo projeto)
+                </p>
               </div>
             </div>
 
             <ChildrenSection 
-              childrenList={childrenList}
+              childrenList={publicChildren}
               onSelectChild={(c) => setSelectedChildForLetter(c)}
               onSponsorChild={handleSponsorChild}
               onZoomImage={setZoomedImage}
@@ -923,7 +1032,13 @@ export default function App() {
                     {sponsored.map(child => (
                       <div key={child.id} className="p-4 rounded-2xl bg-[#1C0E33] border border-purple-500/30 space-y-3 shadow-lg">
                         <div className="flex items-center space-x-3">
-                          <img src={child.image} alt={child.name} className="w-14 h-14 rounded-xl object-cover border border-amber-400" />
+                          <img 
+                            src={child.image} 
+                            alt={child.name} 
+                            className="w-14 h-14 rounded-xl object-cover object-top border-2 border-amber-400 shadow-md cursor-pointer shrink-0" 
+                            onClick={() => setZoomedImage(child.image)}
+                            title="Toque para ampliar foto"
+                          />
                           <div>
                             <h4 className="text-sm font-bold text-white">{child.name}</h4>
                             <p className="text-[11px] text-purple-300">{getAgeDisplay(child.birthDate, child.age)}</p>
@@ -1095,28 +1210,28 @@ export default function App() {
             {/* Quick Metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
               <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 shadow">
-                <span className="text-[9px] text-purple-300 uppercase font-bold block">Crianças (kids)</span>
+                <span className="text-[9px] text-purple-300 uppercase font-bold block">Total Cadastros (kids)</span>
                 <span className="text-2xl font-black text-white mt-1 block">{childrenList.length}</span>
-                <span className="text-[9px] text-purple-400">no banco Supabase</span>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-pink-500/40 shadow">
-                <span className="text-[9px] text-pink-300 uppercase font-bold block">Perfis Cadastrados</span>
-                <span className="text-2xl font-black text-pink-400 mt-1 block">{profilesList.length}</span>
-                <span className="text-[9px] text-pink-300/70">Padrinhos & Famílias</span>
+                <span className="text-[9px] text-purple-400">18 registros preservados</span>
               </div>
               <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-emerald-500/40 shadow">
-                <span className="text-[9px] text-emerald-300 uppercase font-bold block">Apadrinhadas</span>
-                <span className="text-2xl font-black text-emerald-400 mt-1 block">
-                  {childrenList.filter(c => c.status === 'Apadrinhado').length}
-                </span>
-                <span className="text-[9px] text-emerald-300/70">com padrinho ativo</span>
+                <span className="text-[9px] text-emerald-300 uppercase font-bold block">Aprovadas (App Público)</span>
+                <span className="text-2xl font-black text-emerald-400 mt-1 block">{publicChildren.length}</span>
+                <span className="text-[9px] text-emerald-300/70">visíveis na área pública</span>
               </div>
               <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-amber-500/40 shadow">
-                <span className="text-[9px] text-amber-300 uppercase font-bold block">Aguardando</span>
+                <span className="text-[9px] text-amber-300 uppercase font-bold block">Em Análise / Pendentes</span>
                 <span className="text-2xl font-black text-amber-400 mt-1 block">
-                  {childrenList.filter(c => c.status === 'Aguardando Apadrinhamento').length}
+                  {childrenList.filter(c => c.approved === false || c.status === 'Em Análise').length}
                 </span>
-                <span className="text-[9px] text-amber-300/70">esperando acolhida</span>
+                <span className="text-[9px] text-amber-300/70">aguardando liberação</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-pink-500/40 shadow">
+                <span className="text-[9px] text-pink-300 uppercase font-bold block">Apadrinhadas</span>
+                <span className="text-2xl font-black text-pink-400 mt-1 block">
+                  {childrenList.filter(c => c.status === 'Apadrinhado').length}
+                </span>
+                <span className="text-[9px] text-pink-300/70">com padrinho ativo</span>
               </div>
               <div className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 shadow">
                 <span className="text-[9px] text-purple-300 uppercase font-bold block">Galeria</span>
@@ -1150,6 +1265,255 @@ export default function App() {
               </div>
             </div>
 
+            {/* Seção Completa: Todos os 18 Cadastros de Crianças no Painel Administrativo */}
+            <div className="p-5 rounded-3xl bg-[#1A0E2E] border border-purple-500/30 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-purple-900/40">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white flex items-center space-x-2">
+                    <Users className="w-5 h-5 text-amber-400" />
+                    <span>Todos os Cadastros de Crianças ({childrenList.length} Registros)</span>
+                  </h3>
+                  <p className="text-xs text-purple-300">
+                    Controle administrativo integral: 14 aprovadas na área pública e 4 em análise / pendentes.
+                  </p>
+                </div>
+                {/* Filtros rápidos do painel admin com contagens precisas */}
+                <div className="flex items-center space-x-1.5 text-xs overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    onClick={() => setAdminChildFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition text-xs shrink-0 ${
+                      adminChildFilter === 'all' ? 'bg-purple-600 text-white shadow' : 'bg-[#1C0E33] text-purple-300 border border-purple-500/20'
+                    }`}
+                  >
+                    Todas ({childrenList.length})
+                  </button>
+                  <button
+                    onClick={() => setAdminChildFilter('approved')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition text-xs shrink-0 ${
+                      adminChildFilter === 'approved' ? 'bg-emerald-600 text-white shadow' : 'bg-[#1C0E33] text-purple-300 border border-purple-500/20'
+                    }`}
+                  >
+                    Aprovadas ({publicChildren.length})
+                  </button>
+                  <button
+                    onClick={() => setAdminChildFilter('pending')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition text-xs shrink-0 ${
+                      adminChildFilter === 'pending' ? 'bg-amber-500 text-black shadow' : 'bg-[#1C0E33] text-purple-300 border border-purple-500/20'
+                    }`}
+                  >
+                    Em Análise ({childrenList.filter(c => c.approved === false || c.status === 'Em Análise').length})
+                  </button>
+                  <button
+                    onClick={() => setAdminChildFilter('sponsored')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition text-xs shrink-0 ${
+                      adminChildFilter === 'sponsored' ? 'bg-pink-600 text-white shadow' : 'bg-[#1C0E33] text-purple-300 border border-purple-500/20'
+                    }`}
+                  >
+                    Apadrinhadas ({childrenList.filter(c => c.status === 'Apadrinhado').length})
+                  </button>
+                  <button
+                    onClick={() => setAdminChildFilter('waiting')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition text-xs shrink-0 ${
+                      adminChildFilter === 'waiting' ? 'bg-blue-600 text-white shadow' : 'bg-[#1C0E33] text-purple-300 border border-purple-500/20'
+                    }`}
+                  >
+                    Aguardando ({childrenList.filter(c => c.status === 'Aguardando Apadrinhamento').length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Barra de Pesquisa de Crianças no Painel */}
+              <div className="relative flex items-center bg-[#140824] border border-purple-500/30 focus-within:border-amber-400 rounded-2xl px-3.5 py-2.5 shadow transition">
+                <Search className="w-4 h-4 text-amber-400 mr-2.5 shrink-0" />
+                <input 
+                  type="text"
+                  value={adminChildSearch}
+                  onChange={(e) => setAdminChildSearch(e.target.value)}
+                  placeholder="Buscar entre os 18 cadastros por nome, sonho ou pedido..."
+                  className="w-full bg-transparent text-xs text-white placeholder-purple-400 focus:outline-none"
+                />
+                {adminChildSearch && (
+                  <button 
+                    type="button"
+                    onClick={() => setAdminChildSearch('')}
+                    className="p-1 rounded-lg text-purple-400 hover:text-white transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Grid de todos os 18 cadastros organizados */}
+              {(() => {
+                const q = adminChildSearch.toLowerCase().trim();
+                const filteredAdminChildren = childrenList.filter(c => {
+                  if (q) {
+                    const match = 
+                      c.name.toLowerCase().includes(q) ||
+                      (c.desiredGift && c.desiredGift.toLowerCase().includes(q)) ||
+                      c.dream.toLowerCase().includes(q) ||
+                      c.letter.toLowerCase().includes(q);
+                    if (!match) return false;
+                  }
+                  if (adminChildFilter === 'approved') return c.approved !== false && !c.archived;
+                  if (adminChildFilter === 'pending') return c.approved === false || c.status === 'Em Análise';
+                  if (adminChildFilter === 'sponsored') return c.status === 'Apadrinhado';
+                  if (adminChildFilter === 'waiting') return c.status === 'Aguardando Apadrinhamento';
+                  return true;
+                });
+
+                if (filteredAdminChildren.length === 0) {
+                  return (
+                    <div className="p-8 text-center bg-[#1C0E33] rounded-3xl border border-purple-500/20 text-purple-300 space-y-2">
+                      <p className="font-bold text-white text-sm">Nenhum cadastro encontrado para o filtro selecionado.</p>
+                      <button 
+                        type="button"
+                        onClick={() => { setAdminChildFilter('all'); setAdminChildSearch(''); }}
+                        className="px-4 py-2 rounded-xl bg-purple-900/60 text-pink-300 font-bold text-xs"
+                      >
+                        Limpar Filtros e Ver Todos ({childrenList.length})
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {filteredAdminChildren.map((child, idx) => {
+                      const isApproved = child.approved !== false && !child.archived;
+                      return (
+                        <div key={child.id || idx} className="p-4 rounded-3xl bg-[#1C0E33] border border-purple-500/30 hover:border-pink-500/50 space-y-3 shadow-xl flex flex-col justify-between transition group">
+                          <div>
+                            <div className="flex items-start space-x-3">
+                              <div 
+                                className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-pink-500 shadow-md shrink-0 cursor-pointer relative group/img bg-black/40"
+                                onClick={() => setZoomedImage(child.image)}
+                                title="Toque para ampliar foto"
+                              >
+                                <img 
+                                  src={child.image} 
+                                  alt={child.name} 
+                                  className="w-full h-full object-cover object-top group-hover/img:scale-105 transition duration-300 select-none pointer-events-none"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition">
+                                  <ZoomIn className="w-4 h-4 text-white" />
+                                </div>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-sm font-black text-white truncate">{child.name}</h4>
+                                  <span className="text-[10px] text-purple-400 font-bold">#{idx + 1}</span>
+                                </div>
+                                <p className="text-[10px] text-purple-300 font-semibold">{getAgeDisplay(child.birthDate, child.age)} · {child.gender}</p>
+                                
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {/* Status Badge */}
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                    child.status === 'Apadrinhado' 
+                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                                      : child.status === 'Em Análise'
+                                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                  }`}>
+                                    {child.status}
+                                  </span>
+
+                                  {/* Approval Badge */}
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                    isApproved 
+                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                                      : 'bg-amber-400/20 text-amber-200 border border-amber-400/40'
+                                  }`}>
+                                    {isApproved ? 'Aprovada (Área Pública)' : 'Em Análise (Apenas Admin)'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Presente Desejado & Tamanhos */}
+                            {child.desiredGift && (
+                              <div className="mt-2 text-[11px] text-amber-300 font-bold flex items-center space-x-1 truncate bg-[#140824] p-1.5 rounded-xl border border-purple-500/20">
+                                <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <span className="truncate">{child.desiredGift}</span>
+                              </div>
+                            )}
+
+                            <p className="text-xs text-purple-200 mt-2 line-clamp-2 italic leading-relaxed">
+                              "{child.letter || child.dream}"
+                            </p>
+                          </div>
+
+                          {/* Seletor rápido de Status no próprio card */}
+                          <div className="pt-2 border-t border-purple-900/40 space-y-2">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-purple-400 font-bold">Alterar Status:</span>
+                              <select
+                                value={child.status}
+                                onChange={(e) => {
+                                  const newStatus = e.target.value as any;
+                                  setChildrenList(prev => {
+                                    const updated = prev.map(c => c.id === child.id ? { ...c, status: newStatus } : c);
+                                    try { localStorage.setItem('childrenList', JSON.stringify(updated)); } catch {}
+                                    return updated;
+                                  });
+                                  setNotification(`Status de ${child.name} alterado para "${newStatus}"!`);
+                                }}
+                                className="bg-[#140824] border border-purple-500/40 rounded-lg px-2 py-1 text-white font-bold outline-none"
+                              >
+                                <option value="Aguardando Apadrinhamento">Aguardando</option>
+                                <option value="Apadrinhado">Apadrinhado</option>
+                                <option value="Em Análise">Em Análise</option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <button
+                                onClick={() => setSelectedChildForLetter(child)}
+                                className="py-2 px-1.5 rounded-xl bg-purple-900/70 hover:bg-purple-800 text-pink-300 text-[10px] font-black transition text-center truncate border border-purple-500/30"
+                                title="Ver Cartinha"
+                              >
+                                Ver Carta
+                              </button>
+                              
+                              <button
+                                onClick={() => setEditingChildForModal({ ...child })}
+                                className="py-2 px-1.5 rounded-xl bg-[#25153A] hover:bg-purple-800 text-amber-300 text-[10px] font-black transition text-center truncate border border-purple-500/30"
+                                title="Editar Cadastro Completo"
+                              >
+                                Editar
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  // Toggle status / approval
+                                  const nextApproved = !child.approved;
+                                  const nextStatus: 'Aguardando Apadrinhamento' | 'Em Análise' = nextApproved ? 'Aguardando Apadrinhamento' : 'Em Análise';
+                                  setChildrenList(prev => {
+                                    const updated = prev.map(c => c.id === child.id ? { ...c, approved: nextApproved, status: nextStatus } : c);
+                                    try { localStorage.setItem('childrenList', JSON.stringify(updated)); } catch {}
+                                    return updated;
+                                  });
+                                  setNotification(`Status de aprovação de ${child.name} atualizado para ${nextApproved ? 'Aprovada (Pública)' : 'Em Análise'}!`);
+                                }}
+                                className={`py-2 px-1.5 rounded-xl text-[10px] font-black transition text-center truncate border ${
+                                  isApproved 
+                                    ? 'bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border-amber-500/40' 
+                                    : 'bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border-emerald-500/40'
+                                }`}
+                                title={isApproved ? "Colocar em Análise (Ocultar da Área Pública)" : "Aprovar para Área Pública"}
+                              >
+                                {isApproved ? 'Em Análise' : 'Aprovar'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Admin Tabs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
@@ -1166,7 +1530,7 @@ export default function App() {
                 onClick={() => setCurrentScreenIndex(8)}
                 className="p-3.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 text-white font-bold text-xs hover:border-pink-500 transition"
               >
-                Gerenciar Crianças
+                Ver Área Pública ({publicChildren.length})
               </button>
               <button
                 onClick={() => setCurrentScreenIndex(9)}
@@ -1223,6 +1587,74 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Bottom Fixed Navigation Bar (Mobile & Tablet) */}
+      {currentScreenObj.id !== 'admin_dashboard' && (
+        <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#140824]/95 backdrop-blur-xl border-t border-purple-500/25 px-2 py-2 sm:py-2.5 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+          <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
+            <button
+              type="button"
+              onClick={() => setCurrentScreenIndex(0)}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+                currentScreenIndex === 0
+                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <Home className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold truncate">Início</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentScreenIndex(8)}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+                currentScreenIndex === 8
+                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <Heart className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold truncate">Cartinhas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentScreenIndex(5)}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+                currentScreenIndex === 5
+                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <User className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold truncate">Padrinho</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentScreenIndex(4)}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+                currentScreenIndex === 4
+                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <Users className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold truncate">Família</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsDonationModalOpen(true)}
+              className="flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl bg-gradient-to-r from-pink-600 to-amber-500 text-white font-black shadow-lg shadow-pink-900/40 active:scale-95 transition"
+            >
+              <Gift className="w-5 h-5 mb-1 text-white" />
+              <span className="text-[10px] font-black truncate">Doação</span>
+            </button>
+          </div>
+        </nav>
+      )}
 
       {/* 6. Modals Container */}
       <LetterModal 
@@ -1333,33 +1765,77 @@ export default function App() {
         </div>
       )}
 
-      {/* High-Resolution Zoom Lightbox */}
+      {/* High-Resolution Zoom Lightbox with Full Height and Uncropped View */}
       {zoomedImage && (
         <div 
-          className="fixed inset-0 z-[160] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[160] bg-black/95 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
           onClick={() => setZoomedImage(null)}
         >
           <div 
-            className="relative max-w-2xl w-full bg-[#1A1033] rounded-3xl p-3 border border-purple-500/40 shadow-2xl"
+            className="relative max-w-4xl w-full max-h-[94vh] bg-[#160B28] rounded-[32px] p-3 sm:p-4 border-2 border-pink-500/60 shadow-2xl flex flex-col justify-between"
             onClick={(e) => e.stopPropagation()}
           >
-            <button 
-              onClick={() => setZoomedImage(null)}
-              className="absolute top-4 right-4 p-2 rounded-xl bg-purple-900/80 text-white z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-full h-80 sm:h-96 rounded-2xl overflow-hidden flex items-center justify-center">
-              <img src={zoomedImage} alt="Zoom" className="max-w-full max-h-full object-contain" />
+            {/* Header with Title and Close Button */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-purple-900/50 px-2">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 rounded-xl bg-pink-600/30 text-pink-300 border border-pink-500/40">
+                  <ZoomIn className="w-4 h-4 text-pink-400" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-black text-white">Visualização em Alta Resolução</h4>
+                  <p className="text-[10px] text-purple-300">Foto nítida sem cortes · Toque fora para fechar</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setZoomedImage(null)}
+                className="p-2 rounded-2xl bg-purple-900/80 hover:bg-pink-600 text-white transition active:scale-95 shadow"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <p className="text-center text-xs text-purple-300 font-medium mt-2">
-              Visualiza\u00e7\u00e3o Segura em Alta Resolu\u00e7\u00e3o
-            </p>
+
+            {/* Image Container with Full Height Object Contain so no edge is cropped */}
+            <div className="w-full flex-1 max-h-[75vh] rounded-2xl overflow-hidden flex items-center justify-center bg-black/50 p-1 border border-white/5 shadow-inner">
+              <img 
+                src={zoomedImage} 
+                alt="Visualização ampliada" 
+                className="max-w-full max-h-[74vh] w-auto h-auto object-contain rounded-xl shadow-2xl select-none" 
+              />
+            </div>
+
+            {/* Footer with Info and Direct Download option */}
+            <div className="flex items-center justify-between pt-2.5 px-2 text-[11px] text-purple-300 border-t border-purple-900/50 mt-2">
+              <span className="flex items-center space-x-1.5 font-semibold text-amber-300">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Lar Esperança · Corações que Acolhe</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const a = document.createElement('a');
+                    a.href = zoomedImage;
+                    a.download = `lar-esperanca-${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setNotification('Download da foto iniciado!');
+                  } catch {
+                    setNotification('Foto aberta em alta resolução.');
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800 text-pink-300 font-bold flex items-center space-x-1.5 border border-purple-500/30 active:scale-95 transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Baixar Foto</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Security Check Modal for Admin Panel Access */}
+      {/* Security Check Modal for Admin Panel Access (Supabase Auth) */}
       {isSecurityModalOpen && (
         <div 
           className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -1372,7 +1848,7 @@ export default function App() {
             <div className="flex justify-between items-center pb-3 border-b border-purple-900/60">
               <div className="flex items-center space-x-2">
                 <ShieldCheck className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-black text-white">\u00c1rea Segura · Painel</h3>
+                <h3 className="text-base font-black text-white">Área Segura · Painel</h3>
               </div>
               <button onClick={() => setIsSecurityModalOpen(false)} className="p-1.5 text-purple-300 hover:text-white">
                 <X className="w-4 h-4" />
@@ -1381,33 +1857,69 @@ export default function App() {
 
             <div className="space-y-3">
               <p className="text-xs text-purple-200">
-                Acesso restrito \u00e0 coordena\u00e7\u00e3o do Lar Esperan\u00e7a. Digite a senha:
+                Acesso restrito à coordenação do Lar Esperança. Identifique-se com suas credenciais do Supabase:
               </p>
 
-              <input 
-                type="email"
-                placeholder="E-mail (opcional)"
-                value={securityEmailInput}
-                onChange={(e) => setSecurityEmailInput(e.target.value)}
-                className="w-full bg-[#140824] border border-purple-500/40 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-amber-400"
-              />
+              {authError && (
+                <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/50 text-[11px] text-red-200 leading-snug">
+                  {authError}
+                </div>
+              )}
 
-              <input 
-                type="password"
-                placeholder="Senha de Acesso ou PIN"
-                value={securityPasswordInput}
-                onChange={(e) => setSecurityPasswordInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleVerifySecurityCredentials(); }}
-                className="w-full bg-[#140824] border border-amber-500/40 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-amber-400"
-              />
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-amber-300 block">E-mail de Administrador</label>
+                <input 
+                  type="email"
+                  placeholder="admin@laresperanca.org"
+                  value={securityEmailInput}
+                  onChange={(e) => setSecurityEmailInput(e.target.value)}
+                  className="w-full bg-[#140824] border border-purple-500/40 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-amber-300 block">Senha</label>
+                <div className="relative">
+                  <input 
+                    type={showSecurityPassword ? "text" : "password"}
+                    placeholder="Sua senha do Supabase"
+                    value={securityPasswordInput}
+                    onChange={(e) => setSecurityPasswordInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleVerifySecurityCredentials(); }}
+                    className="w-full bg-[#140824] border border-amber-500/40 rounded-xl pl-3 pr-10 py-2.5 text-white text-xs outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecurityPassword(!showSecurityPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-400 hover:text-white"
+                  >
+                    {showSecurityPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
 
               <button
                 type="button"
                 onClick={handleVerifySecurityCredentials}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-pink-600 to-amber-500 text-white font-black text-xs shadow-xl active:scale-95 transition"
+                disabled={authLoading}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-pink-600 to-amber-500 text-white font-black text-xs shadow-xl active:scale-95 transition flex items-center justify-center space-x-2 disabled:opacity-50"
               >
-                Desbloquear Painel Seguro
+                {authLoading ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Autenticando via Supabase Auth...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4 text-amber-200" />
+                    <span>Entrar com Supabase Auth</span>
+                  </>
+                )}
               </button>
+
+              <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20 text-[10px] text-purple-300 text-center">
+                Acesso oficial protegido por Supabase Authentication. Sem senhas fixas no cliente.
+              </div>
             </div>
           </div>
         </div>
@@ -1417,81 +1929,208 @@ export default function App() {
       {isMobileDrawerOpen && (
         <div className="fixed inset-0 z-[150] flex">
           <div 
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-pointer"
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm cursor-pointer transition-opacity"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
-          <div className="relative w-72 max-w-[80vw] bg-[#1A0E2E] h-full p-5 flex flex-col justify-between z-10 border-r border-purple-500/30 animate-in slide-in-from-left duration-200 overflow-y-auto">
+          <div className="relative w-80 max-w-[85vw] bg-[#180E2B] h-full p-5 flex flex-col justify-between z-10 border-r border-purple-500/30 animate-in slide-in-from-left duration-200 overflow-y-auto">
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-purple-900/60">
-                <div className="flex items-center space-x-2.5">
-                  <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
-                  <span className="font-black text-sm text-white">Menu Principal</span>
+              {/* Header with Project Avatar & Branding */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-purple-900/60">
+                <div className="flex items-center space-x-3">
+                  <div 
+                    className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-pink-500 shadow-lg shrink-0 cursor-pointer"
+                    onClick={() => setZoomedImage(adminAvatar || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=400&h=400&fit=crop')}
+                    title="Ver Foto do Projeto"
+                  >
+                    <img 
+                      src={adminAvatar || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=400&h=400&fit=crop'} 
+                      alt="Logo" 
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-black text-sm text-white truncate block">{projectName}</span>
+                    <span className="text-[10px] text-amber-300 font-bold uppercase tracking-wider block">{institutionName}</span>
+                  </div>
                 </div>
-                <button onClick={() => setIsMobileDrawerOpen(false)} className="p-1.5 text-purple-300">
+                <button 
+                  onClick={() => setIsMobileDrawerOpen(false)} 
+                  className="p-2 rounded-xl bg-purple-900/60 hover:bg-purple-900 text-purple-300 hover:text-white transition active:scale-95"
+                  title="Fechar Menu"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-1.5 text-xs font-bold text-purple-200">
+              {/* Menu Lateral Original: 6 Itens Essenciais sem Duplicações */}
+              <div className="space-y-2">
+                {/* 1. Início */}
                 <button 
                   onClick={() => { setCurrentScreenIndex(0); setIsMobileDrawerOpen(false); }}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-purple-900/40 transition flex items-center space-x-2.5"
+                  className={`w-full text-left p-3 rounded-2xl transition flex items-center justify-between font-bold text-xs ${
+                    currentScreenIndex === 0 
+                      ? 'bg-gradient-to-r from-pink-600/30 via-[#2E1844] to-[#1C0E2F] text-pink-200 border border-pink-500/40 shadow-lg' 
+                      : 'bg-[#22133B] text-purple-200 border border-purple-500/20 hover:border-pink-500/40'
+                  }`}
                 >
-                  <Home className="w-4 h-4 text-pink-400" />
-                  <span>In\u00edcio</span>
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-pink-500/20 text-pink-400 border border-pink-500/30 shrink-0">
+                      <Home className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white text-xs block">Início</span>
+                      <span className="text-[10px] text-purple-300 font-normal block truncate">Página principal & novidades</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60 shrink-0" />
                 </button>
-                <button 
-                  onClick={() => { setCurrentScreenIndex(8); setIsMobileDrawerOpen(false); }}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-purple-900/40 transition flex items-center space-x-2.5"
-                >
-                  <Heart className="w-4 h-4 text-pink-400" />
-                  <span>Cartinhas de Natal</span>
-                </button>
-                <button 
-                  onClick={() => { setCurrentScreenIndex(9); setIsMobileDrawerOpen(false); }}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-purple-900/40 transition flex items-center space-x-2.5"
-                >
-                  <ImageIcon className="w-4 h-4 text-amber-400" />
-                  <span>Galeria de Fotos</span>
-                </button>
-                <button 
-                  onClick={() => { setCurrentScreenIndex(5); setIsMobileDrawerOpen(false); }}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-purple-900/40 transition flex items-center space-x-2.5"
-                >
-                  <User className="w-4 h-4 text-purple-300" />
-                  <span>\u00c1rea do Padrinho</span>
-                </button>
+
+                {/* 2. Área da Família */}
                 <button 
                   onClick={() => { setCurrentScreenIndex(4); setIsMobileDrawerOpen(false); }}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-purple-900/40 transition flex items-center space-x-2.5"
+                  className={`w-full text-left p-3 rounded-2xl transition flex items-center justify-between font-bold text-xs ${
+                    currentScreenIndex === 4 
+                      ? 'bg-gradient-to-r from-pink-600/30 via-[#2E1844] to-[#1C0E2F] text-pink-200 border border-pink-500/40 shadow-lg' 
+                      : 'bg-[#22133B] text-purple-200 border border-purple-500/20 hover:border-pink-500/40'
+                  }`}
                 >
-                  <Users className="w-4 h-4 text-purple-300" />
-                  <span>\u00c1rea da Fam\u00edlia</span>
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
+                      <Heart className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white text-xs block">Área da Família</span>
+                      <span className="text-[10px] text-purple-300 font-normal block truncate">Acolhimento & cadastros</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60 shrink-0" />
                 </button>
+
+                {/* 3. Área do Padrinho */}
+                <button 
+                  onClick={() => { setCurrentScreenIndex(5); setIsMobileDrawerOpen(false); }}
+                  className={`w-full text-left p-3 rounded-2xl transition flex items-center justify-between font-bold text-xs ${
+                    currentScreenIndex === 5 
+                      ? 'bg-gradient-to-r from-pink-600/30 via-[#2E1844] to-[#1C0E2F] text-pink-200 border border-pink-500/40 shadow-lg' 
+                      : 'bg-[#22133B] text-purple-200 border border-purple-500/20 hover:border-pink-500/40'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white text-xs block">Área do Padrinho</span>
+                      <span className="text-[10px] text-purple-300 font-normal block truncate">Minhas crianças apadrinhadas</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60 shrink-0" />
+                </button>
+
+                {/* 4. Doação (PIX) */}
                 <button 
                   onClick={() => { setIsDonationModalOpen(true); setIsMobileDrawerOpen(false); }}
-                  className="w-full text-left p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 transition flex items-center space-x-2.5 font-black"
+                  className="w-full text-left p-3 rounded-2xl bg-[#22133B] hover:bg-[#2C194B] text-purple-200 border border-amber-500/30 hover:border-amber-400 transition flex items-center justify-between font-bold text-xs shadow-md"
                 >
-                  <Gift className="w-4 h-4 text-amber-400" />
-                  <span>Fazer Doa\u00e7\u00e3o PIX</span>
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                      <Gift className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-amber-200 text-xs block">Doação (PIX)</span>
+                      <span className="text-[10px] text-amber-300/70 font-normal block truncate">Contribuições e amor</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-amber-400/60 shrink-0" />
                 </button>
+
+                {/* 5. Galeria de Fotos */}
+                <button 
+                  onClick={() => { setCurrentScreenIndex(9); setIsMobileDrawerOpen(false); }}
+                  className={`w-full text-left p-3 rounded-2xl transition flex items-center justify-between font-bold text-xs ${
+                    currentScreenIndex === 9 
+                      ? 'bg-gradient-to-r from-pink-600/30 via-[#2E1844] to-[#1C0E2F] text-pink-200 border border-pink-500/40 shadow-lg' 
+                      : 'bg-[#22133B] text-purple-200 border border-purple-500/20 hover:border-pink-500/40'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                      <ImageIcon className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white text-xs block">Galeria de Fotos</span>
+                      <span className="text-[10px] text-purple-300 font-normal block truncate">Momentos das crianças</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60 shrink-0" />
+                </button>
+
+                {/* 6. Instalar Aplicativo */}
+                <button 
+                  onClick={() => { setCurrentScreenIndex(14); setIsMobileDrawerOpen(false); }}
+                  className={`w-full text-left p-3 rounded-2xl transition flex items-center justify-between font-bold text-xs ${
+                    currentScreenIndex === 14 
+                      ? 'bg-gradient-to-r from-pink-600/30 via-[#2E1844] to-[#1C0E2F] text-pink-200 border border-pink-500/40 shadow-lg' 
+                      : 'bg-[#22133B] text-purple-200 border border-purple-500/20 hover:border-pink-500/40'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-pink-500/20 text-pink-400 border border-pink-500/30 shrink-0">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white text-xs block">Instalar Aplicativo</span>
+                      <span className="text-[10px] text-purple-300 font-normal block truncate">Instalação direta no celular</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60 shrink-0" />
+                </button>
+              </div>
+
+              {/* Nossas Redes Sociais Oficiais */}
+              <div className="pt-3 border-t border-purple-900/50 space-y-2">
+                <span className="text-[9px] uppercase tracking-widest font-black text-purple-400 px-1 block">
+                  NOSSAS REDES
+                </span>
+                <div className="space-y-1.5">
+                  {socialLinks.map(link => (
+                    <a 
+                      key={link.id} 
+                      href={link.url} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className={`p-2 rounded-xl border ${link.borderColor} bg-[#140824] flex items-center space-x-2.5 hover:border-white/50 transition shadow-sm`}
+                    >
+                      <div className={`w-7 h-7 rounded-lg ${link.color} text-white flex items-center justify-center font-black text-[10px] shadow`}>
+                        {link.icon}
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold text-white">{link.platform}</div>
+                        <div className="text-[8px] text-purple-300">Acesse</div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                setIsMobileDrawerOpen(false);
-                if (isSafePanelUnlocked) {
-                  setCurrentScreenIndex(3);
-                } else {
-                  setIsSecurityModalOpen(true);
-                }
-              }}
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-600 via-pink-600 to-amber-600 text-white font-black text-xs shadow-lg flex items-center justify-center space-x-2"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Painel de Gest\u00e3o</span>
-            </button>
+            {/* Rodapé do Menu: Botão Oficial Painel de Gestão (Área Segura) */}
+            <div className="pt-4 border-t border-purple-900/60 mt-4">
+              <button
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  if (isSafePanelUnlocked) {
+                    setCurrentScreenIndex(3);
+                  } else {
+                    setIsSecurityModalOpen(true);
+                  }
+                }}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 via-pink-600 to-amber-600 hover:from-amber-500 hover:to-pink-500 text-white font-black text-xs shadow-xl flex items-center justify-center space-x-2 border border-amber-400/40 active:scale-95 transition"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-200" />
+                <span>Painel de Gestão (Área Segura)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

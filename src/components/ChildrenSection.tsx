@@ -8,6 +8,9 @@ interface ChildrenSectionProps {
   onSponsorChild: (childId: string) => void;
   onZoomImage: (url: string) => void;
   getAgeDisplay: (birthDate?: string, age?: number | string) => string;
+  isHome?: boolean;
+  limit?: number;
+  onViewAll?: () => void;
 }
 
 export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
@@ -16,6 +19,9 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
   onSponsorChild,
   onZoomImage,
   getAgeDisplay,
+  isHome = false,
+  limit,
+  onViewAll,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'sponsored'>('all');
@@ -40,22 +46,22 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
 
     // Age filter
     if (ageFilter === 'babies') {
-      // 0 to 11 months
       if (child.age !== 0 && !child.birthDate) return false;
       if (child.age > 0) return false;
     } else if (ageFilter === 'small') {
-      // 1 to 6 years
       if (child.age < 1 || child.age > 6) return false;
     } else if (ageFilter === 'kids') {
-      // 7 to 12 years
       if (child.age < 7 || child.age > 12) return false;
     } else if (ageFilter === 'teens') {
-      // 13+ years
       if (child.age < 13) return false;
     }
 
     return true;
   });
+
+  const displayedChildren = (isHome && limit && limit > 0) 
+    ? filteredChildren.slice(0, limit) 
+    : filteredChildren;
 
   return (
     <div className="w-full space-y-4 pt-1 pb-4">
@@ -67,9 +73,19 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
             <span>Adote uma Cartinha · Crianças Acolhidas</span>
           </h3>
           <p className="text-xs text-purple-300 mt-0.5">
-            {childrenList.length} crianças cadastradas esperando amor e presentes de Natal
+            {childrenList.length} crianças aprovadas para apadrinhamento público (18 no total do Lar Esperança)
           </p>
         </div>
+        {isHome && onViewAll && (
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="text-xs text-pink-400 hover:text-pink-300 font-bold underline flex items-center space-x-1 transition self-start sm:self-center"
+          >
+            <span>Ver todas ({childrenList.length})</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Search Bar & Status Filters */}
@@ -158,7 +174,7 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
         </div>
       </div>
 
-      {/* Children Grid */}
+      {/* Children Grid - Responsive: 2 cols on mobile, 3 on tablet, 4 on desktop */}
       {filteredChildren.length === 0 ? (
         <div className="p-8 rounded-3xl bg-[#1A1033] border border-purple-500/20 text-center space-y-2">
           <Heart className="w-10 h-10 text-purple-400 mx-auto opacity-50" />
@@ -175,112 +191,129 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredChildren.map((child) => {
-            const isSponsored = child.status === 'Apadrinhado';
-            return (
-              <div 
-                key={child.id}
-                className="p-3.5 sm:p-4 rounded-[28px] bg-gradient-to-b from-[#221338] to-[#160B28] border border-purple-500/30 hover:border-pink-500/60 shadow-xl flex flex-col justify-between group transition-all duration-300"
-              >
-                <div>
-                  {/* Image with zoom and status overlay */}
-                  <div 
-                    className="w-full aspect-square rounded-[22px] overflow-hidden border-2 border-pink-500/40 relative mb-3 cursor-pointer shadow-md select-none group"
-                    onClick={() => onZoomImage(child.image)}
-                    title="Toque para ampliar foto"
-                  >
-                    <img 
-                      src={child.image} 
-                      alt={child.name} 
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition duration-500 select-none pointer-events-none"
-                    />
-                    
-                    {/* Floating Status Badge */}
-                    <span className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase shadow-lg ${
-                      isSponsored 
-                        ? 'bg-emerald-500 text-white border border-emerald-300/40' 
-                        : 'bg-amber-400 text-black border border-amber-300 font-black'
-                    }`}>
-                      {isSponsored ? 'Apadrinhada' : 'Aguardando'}
-                    </span>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {displayedChildren.map((child) => {
+              const isSponsored = child.status === 'Apadrinhado';
+              return (
+                <div 
+                  key={child.id}
+                  className="p-3 sm:p-3.5 rounded-[24px] sm:rounded-[28px] bg-gradient-to-b from-[#24133A] via-[#1C0E30] to-[#140824] border-2 border-pink-500/40 hover:border-pink-400/80 shadow-2xl flex flex-col justify-between group transition-all duration-300"
+                >
+                  <div>
+                    {/* Vertical 9:16 Photo Container matching video reel format */}
+                    <div 
+                      className="w-full aspect-[9/16] rounded-[20px] overflow-hidden border border-pink-500/60 relative mb-2.5 cursor-pointer shadow-lg select-none group bg-black/40"
+                      onClick={() => onZoomImage(child.image)}
+                      title="Toque para ampliar foto"
+                    >
+                      <img 
+                        src={child.image} 
+                        alt={child.name} 
+                        loading="lazy"
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition duration-500 select-none pointer-events-none"
+                      />
 
-                    {/* Age Pill on Image */}
-                    <span className="absolute bottom-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur-md text-white text-[10px] font-extrabold shadow">
-                      {getAgeDisplay(child.birthDate, child.age)}
-                    </span>
-                  </div>
-
-                  {/* Child Info */}
-                  <div className="space-y-1">
-                    <h4 className="text-sm sm:text-base font-black text-white truncate">
-                      {child.name}
-                    </h4>
-
-                    {/* Desired Gift or Dream */}
-                    <div className="text-[11px] text-amber-300 font-semibold flex items-center space-x-1 truncate">
-                      <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span className="truncate">
-                        {child.desiredGift || child.dream || 'Presente de Natal'}
+                      {/* Gradient shadow overlay for text/badge readability */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25 pointer-events-none" />
+                      
+                      {/* Floating Status Badge (Bottom Right, matching screenshots) */}
+                      <span className={`absolute bottom-2.5 right-2 px-2.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black tracking-wide uppercase shadow-lg ${
+                        isSponsored 
+                          ? 'bg-emerald-500 text-white border border-emerald-300/40' 
+                          : 'bg-amber-400 text-black border border-amber-300 font-black'
+                      }`}>
+                        {isSponsored ? 'Apadrinhada' : 'ESPERA'}
                       </span>
                     </div>
 
-                    {/* Sizing badges if available */}
-                    {(child.shoeSize || child.clothesSize) && (
-                      <div className="flex items-center space-x-1.5 pt-1 text-[10px] text-purple-300">
-                        {child.clothesSize && (
-                          <span className="bg-[#140824] px-2 py-0.5 rounded-md border border-purple-500/20">
-                            Roupa: <strong>{child.clothesSize}</strong>
-                          </span>
-                        )}
-                        {child.shoeSize && (
-                          <span className="bg-[#140824] px-2 py-0.5 rounded-md border border-purple-500/20">
-                            Nº <strong>{child.shoeSize}</strong>
-                          </span>
-                        )}
+                    {/* Child Info */}
+                    <div className="space-y-1">
+                      <div className="flex items-baseline justify-between gap-1">
+                        <h4 className="text-xs sm:text-sm font-black text-white truncate">
+                          {child.name}
+                        </h4>
+                        <span className="text-[10px] text-purple-300 font-bold shrink-0">
+                          {getAgeDisplay(child.birthDate, child.age)}
+                        </span>
                       </div>
-                    )}
 
-                    {/* Short Letter Preview */}
-                    <p className="text-[10px] sm:text-[11px] text-purple-200 line-clamp-2 italic pt-1 leading-snug">
-                      "{child.letter}"
-                    </p>
+                      {/* Desired Gift or Dream */}
+                      <div className="text-[10px] sm:text-[11px] text-amber-300 font-semibold flex items-center space-x-1 truncate">
+                        <Gift className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span className="truncate">
+                          {child.desiredGift || child.dream || 'Presente de Natal'}
+                        </span>
+                      </div>
+
+                      {/* Sizing badges if available */}
+                      {(child.shoeSize || child.clothesSize) && (
+                        <div className="flex items-center space-x-1 pt-0.5 text-[9px] text-purple-300">
+                          {child.clothesSize && (
+                            <span className="bg-[#140824] px-1.5 py-0.5 rounded-md border border-purple-500/20 truncate">
+                              Roupa: <strong>{child.clothesSize}</strong>
+                            </span>
+                          )}
+                          {child.shoeSize && (
+                            <span className="bg-[#140824] px-1.5 py-0.5 rounded-md border border-purple-500/20 truncate">
+                              Nº <strong>{child.shoeSize}</strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Card Actions */}
-                <div className="space-y-2 pt-3 border-t border-purple-900/40 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => onSelectChild(child)}
-                    className="w-full py-2.5 rounded-xl bg-purple-900/80 hover:bg-purple-800 text-pink-200 font-extrabold text-xs shadow-md active:scale-95 transition flex items-center justify-center space-x-1.5 border border-purple-500/30"
-                  >
-                    <span>Ler Cartinha de Natal</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-pink-400" />
-                  </button>
-
-                  {!isSponsored ? (
+                  {/* Card Actions: Purple "VER CARTA" button matching original screenshots */}
+                  <div className="space-y-1.5 pt-2.5 border-t border-purple-900/40 mt-2.5">
                     <button
                       type="button"
-                      onClick={() => onSponsorChild(child.id)}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-black text-xs shadow-lg active:scale-95 transition flex items-center justify-center space-x-1"
+                      onClick={() => onSelectChild(child)}
+                      className="w-full py-2 px-2 rounded-xl bg-purple-900/80 hover:bg-purple-800 text-pink-200 hover:text-white font-extrabold text-[10px] sm:text-xs shadow-md active:scale-95 transition flex items-center justify-center space-x-1 border border-purple-500/30 text-center uppercase tracking-wider"
+                      title="Ver Detalhes e Cartinha"
                     >
-                      <Heart className="w-3.5 h-3.5 fill-white" />
-                      <span>Quero Apadrinhar!</span>
+                      <span>VER CARTA</span>
                     </button>
-                  ) : (
-                    <div className="w-full py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] text-center flex items-center justify-center space-x-1">
-                      <Check className="w-3 h-3" />
-                      <span>Apadrinhada</span>
-                    </div>
-                  )}
+
+                    {!isSponsored ? (
+                      <button
+                        type="button"
+                        onClick={() => onSponsorChild(child.id)}
+                        className="w-full py-1.5 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-bold text-[9px] sm:text-[10px] shadow active:scale-95 transition flex items-center justify-center space-x-1 text-center"
+                        title="Apadrinhar esta criança"
+                      >
+                        <Heart className="w-3 h-3 fill-white shrink-0" />
+                        <span>Apadrinhar</span>
+                      </button>
+                    ) : (
+                      <div className="py-1 px-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-semibold text-[9px] text-center flex items-center justify-center space-x-1">
+                        <Check className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                        <span>Apadrinhada</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {/* Prominent "Ver Todos" button for Home screen when limited */}
+          {isHome && onViewAll && filteredChildren.length > (limit || 4) && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onViewAll}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#2A1840] via-[#32184E] to-[#201036] hover:from-[#361E54] hover:to-[#2A1448] text-purple-200 hover:text-white font-extrabold text-xs sm:text-sm border-2 border-pink-500/40 hover:border-pink-400 shadow-xl active:scale-95 transition flex items-center justify-center space-x-2"
+              >
+                <span>+ {filteredChildren.length - (limit || 4)} outras crianças (Ver Todas)</span>
+                <ChevronRight className="w-4 h-4 text-pink-400" />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 };
+
+

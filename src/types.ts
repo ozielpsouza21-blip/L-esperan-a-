@@ -36,6 +36,8 @@ export interface Child {
   desiredGift?: string;
   shoeSize?: string;
   clothesSize?: string;
+  approved?: boolean;
+  archived?: boolean;
 }
 
 export interface LocalAppNotification {
