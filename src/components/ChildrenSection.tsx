@@ -88,91 +88,93 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
         )}
       </div>
 
-      {/* Search Bar & Status Filters */}
-      <div className="space-y-2.5">
-        <div className="relative flex items-center bg-[#1A1033] border border-purple-500/30 focus-within:border-pink-500 rounded-2xl px-3.5 py-3 shadow transition">
-          <Search className="w-4 h-4 text-pink-400 mr-2.5 shrink-0" />
-          <input 
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nome, sonho ou presente (ex: bola, skate, boneca)..."
-            className="w-full bg-transparent text-xs sm:text-sm text-white placeholder-purple-400 focus:outline-none"
-          />
-          {searchQuery && (
-            <button 
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="p-1 rounded-lg text-purple-400 hover:text-white transition"
-              title="Limpar busca"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+      {/* Search Bar & Status Filters (Displayed in Todas as Crianças screen / waiting area) */}
+      {!isHome && (
+        <div className="space-y-2.5">
+          <div className="relative flex items-center bg-[#1A1033] border border-purple-500/30 focus-within:border-pink-500 rounded-2xl px-3.5 py-3 shadow transition">
+            <Search className="w-4 h-4 text-pink-400 mr-2.5 shrink-0" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar nome ou sonho..."
+              className="w-full bg-transparent text-xs sm:text-sm text-white placeholder-purple-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button 
+                type="button" 
+                onClick={() => setSearchQuery('')}
+                className="p-1 rounded-lg text-purple-400 hover:text-white transition"
+                title="Limpar busca"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
-        {/* Status Filter Buttons */}
-        <div className="flex items-center space-x-2 text-xs overflow-x-auto pb-1 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setStatusFilter('all')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition shrink-0 ${
-              statusFilter === 'all' 
-                ? 'bg-gradient-to-r from-pink-600 to-amber-500 text-white shadow' 
-                : 'bg-[#22133B] text-purple-300 border border-purple-500/25 hover:border-purple-400'
-            }`}
-          >
-            Todas ({childrenList.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter('waiting')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition shrink-0 ${
-              statusFilter === 'waiting' 
-                ? 'bg-amber-500 text-black shadow font-black' 
-                : 'bg-[#22133B] text-purple-300 border border-purple-500/25 hover:border-purple-400'
-            }`}
-          >
-            Aguardando ({childrenList.filter(c => c.status === 'Aguardando Apadrinhamento').length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter('sponsored')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition shrink-0 ${
-              statusFilter === 'sponsored' 
-                ? 'bg-emerald-600 text-white shadow' 
-                : 'bg-[#22133B] text-purple-300 border border-purple-500/25 hover:border-purple-400'
-            }`}
-          >
-            Apadrinhadas ({childrenList.filter(c => c.status === 'Apadrinhado').length})
-          </button>
-        </div>
-
-        {/* Age Segment Filter Chips */}
-        <div className="flex items-center space-x-1.5 text-[11px] overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-[10px] text-purple-400 uppercase font-bold mr-1 shrink-0">Idade:</span>
-          {[
-            { id: 'all', label: 'Todas as Idades' },
-            { id: 'babies', label: 'Bebês (0 a 11m)' },
-            { id: 'small', label: '1 a 6 anos' },
-            { id: 'kids', label: '7 a 12 anos' },
-            { id: 'teens', label: '13+ anos' }
-          ].map(f => (
+          {/* Status Filter Buttons */}
+          <div className="flex items-center space-x-2 text-xs overflow-x-auto pb-1 scrollbar-none">
             <button
-              key={f.id}
               type="button"
-              onClick={() => setAgeFilter(f.id as any)}
-              className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                ageFilter === f.id
-                  ? 'bg-purple-700 text-white font-bold'
-                  : 'bg-[#180E2B] text-purple-400 hover:text-purple-200 border border-purple-500/15'
+              onClick={() => setStatusFilter('all')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition shrink-0 ${
+                statusFilter === 'all' 
+                  ? 'bg-gradient-to-r from-pink-600 to-amber-500 text-white shadow' 
+                  : 'bg-[#22133B] text-purple-300 border border-purple-500/25 hover:border-purple-400'
               }`}
             >
-              {f.label}
+              Todas ({childrenList.length})
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setStatusFilter('waiting')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition shrink-0 ${
+                statusFilter === 'waiting' 
+                  ? 'bg-amber-500 text-black shadow font-black' 
+                  : 'bg-[#22133B] text-purple-300 border border-purple-500/25 hover:border-purple-400'
+              }`}
+            >
+              Aguardando ({childrenList.filter(c => c.status === 'Aguardando Apadrinhamento').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('sponsored')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition shrink-0 ${
+                statusFilter === 'sponsored' 
+                  ? 'bg-emerald-600 text-white shadow' 
+                  : 'bg-[#22133B] text-purple-300 border border-purple-500/25 hover:border-purple-400'
+              }`}
+            >
+              Apadrinhadas ({childrenList.filter(c => c.status === 'Apadrinhado').length})
+            </button>
+          </div>
+
+          {/* Age Segment Filter Chips */}
+          <div className="flex items-center space-x-1.5 text-[11px] overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-[10px] text-purple-400 uppercase font-bold mr-1 shrink-0">Idade:</span>
+            {[
+              { id: 'all', label: 'Todas as Idades' },
+              { id: 'babies', label: 'Bebês (0 a 11m)' },
+              { id: 'small', label: '1 a 6 anos' },
+              { id: 'kids', label: '7 a 12 anos' },
+              { id: 'teens', label: '13+ anos' }
+            ].map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setAgeFilter(f.id as any)}
+                className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
+                  ageFilter === f.id
+                    ? 'bg-purple-700 text-white font-bold'
+                    : 'bg-[#180E2B] text-purple-400 hover:text-purple-200 border border-purple-500/15'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Children Grid - Responsive: 2 cols on mobile, 3 on tablet, 4 on desktop */}
       {filteredChildren.length === 0 ? (
@@ -297,15 +299,15 @@ export const ChildrenSection: React.FC<ChildrenSectionProps> = ({
             })}
           </div>
 
-          {/* Prominent "Ver Todos" button for Home screen when limited */}
-          {isHome && onViewAll && filteredChildren.length > (limit || 4) && (
+          {/* Prominent "Ver todas as crianças" button for Home screen when limited */}
+          {isHome && onViewAll && (
             <div className="pt-2">
               <button
                 type="button"
                 onClick={onViewAll}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#2A1840] via-[#32184E] to-[#201036] hover:from-[#361E54] hover:to-[#2A1448] text-purple-200 hover:text-white font-extrabold text-xs sm:text-sm border-2 border-pink-500/40 hover:border-pink-400 shadow-xl active:scale-95 transition flex items-center justify-center space-x-2"
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#2A1840] via-[#32184E] to-[#201036] hover:from-[#361E54] hover:to-[#2A1448] text-purple-200 hover:text-white font-extrabold text-xs sm:text-sm border-2 border-pink-500/40 hover:border-pink-400 shadow-xl active:scale-95 transition flex items-center justify-center space-x-2 min-h-[48px]"
               >
-                <span>+ {filteredChildren.length - (limit || 4)} outras crianças (Ver Todas)</span>
+                <span>+ {filteredChildren.length > (limit || 4) ? `${filteredChildren.length - (limit || 4)} outras crianças · ` : ''}Ver todas as crianças ({childrenList.length})</span>
                 <ChevronRight className="w-4 h-4 text-pink-400" />
               </button>
             </div>

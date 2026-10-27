@@ -233,9 +233,19 @@ export default function App() {
     try { return localStorage.getItem('institutionName') || 'Lar Esperança'; } catch { return 'Lar Esperança'; }
   });
 
-  // Notifications State & Alerts
-  const [notification, setNotification] = useState<string | null>('Bem-vindo ao Cora\u00e7\u00f5es que Acolhe!');
+  // Notifications State & Alerts (Initialized to null to prevent overlapping bottom navigation)
+  const [notification, setNotification] = useState<string | null>(null);
   const [topEventAlert, setTopEventAlert] = useState<{ title: string; body: string } | null>(null);
+
+  // Auto-dismiss notification after 3.5 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
   const [notificationsList, setNotificationsList] = useState<LocalAppNotification[]>(() => {
     try {
       const saved = localStorage.getItem('localNotifications');
@@ -432,6 +442,7 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [adminTab, setAdminTab] = useState<'dashboard' | 'children' | 'padrinhos' | 'familias' | 'gallery' | 'camera' | 'carousel' | 'media916' | 'pix' | 'evangelical' | 'festive' | 'security' | 'profile'>('dashboard');
+  const [isAdminDrawerOpen, setIsAdminDrawerOpen] = useState(false);
 
   // Listen to Supabase Auth state & check active session on mount
   useEffect(() => {
@@ -721,34 +732,44 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. Toast Notification */}
+      {/* 3. Toast Notification (Positioned safely above bottom nav, auto-dismissing) */}
       {notification && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[140] bg-gradient-to-r from-pink-600 to-amber-500 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center space-x-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-3 duration-300">
-          <Sparkles className="w-4 h-4 text-amber-200" />
-          <span>{notification}</span>
+        <div className="fixed bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-[140] bg-gradient-to-r from-pink-600 to-amber-500 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center space-x-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-3 duration-300 max-w-[90vw]">
+          <Sparkles className="w-4 h-4 text-amber-200 shrink-0" />
+          <span className="truncate">{notification}</span>
+          <button 
+            type="button" 
+            onClick={() => setNotification(null)}
+            className="p-1 rounded-full hover:bg-white/20 text-white/80 hover:text-white shrink-0 ml-1"
+            title="Fechar"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* 4. Top Navigation Bar (Contract Compliant) */}
-      <TopNav 
-        projectName={projectName}
-        institutionName={institutionName}
-        currentScreenId={currentScreenObj.id}
-        onNavigate={setCurrentScreenIndex}
-        onOpenMenu={() => setIsMobileDrawerOpen(true)}
-        onDonateClick={() => setIsDonationModalOpen(true)}
-        onOpenSafePanel={() => {
-          if (isSafePanelUnlocked) {
-            setCurrentScreenIndex(3);
-          } else {
-            setIsSecurityModalOpen(true);
-          }
-        }}
-        onToggleSound={() => setIsFestiveSoundEnabled(!isFestiveSoundEnabled)}
-        isSoundEnabled={isFestiveSoundEnabled}
-        unreadNotifsCount={notificationsList.filter(n => !n.read).length}
-        onOpenNotifs={() => setIsNotificationCenterOpen(true)}
-      />
+      {/* 4. Top Navigation Bar (Shown on public screens, hidden in dedicated admin dashboard to avoid duplicate header/menu button) */}
+      {currentScreenObj.id !== 'admin_dashboard' && (
+        <TopNav 
+          projectName={projectName}
+          institutionName={institutionName}
+          currentScreenId={currentScreenObj.id}
+          onNavigate={setCurrentScreenIndex}
+          onOpenMenu={() => setIsMobileDrawerOpen(true)}
+          onDonateClick={() => setIsDonationModalOpen(true)}
+          onOpenSafePanel={() => {
+            if (isSafePanelUnlocked) {
+              setCurrentScreenIndex(3);
+            } else {
+              setIsSecurityModalOpen(true);
+            }
+          }}
+          onToggleSound={() => setIsFestiveSoundEnabled(!isFestiveSoundEnabled)}
+          isSoundEnabled={isFestiveSoundEnabled}
+          unreadNotifsCount={notificationsList.filter(n => !n.read).length}
+          onOpenNotifs={() => setIsNotificationCenterOpen(true)}
+        />
+      )}
 
       {/* 5. Main View Router */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-3.5 sm:px-6 py-4 flex flex-col justify-between pb-24 sm:pb-28">
@@ -876,21 +897,22 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== ALL CHILDREN (WAITING AREA) ==================== */}
+        {/* ==================== ALL CHILDREN (WAITING AREA - SCREENSHOT 3) ==================== */}
         {currentScreenObj.id === 'waiting_area' && (
           <div className="space-y-4 w-full animate-in fade-in duration-300">
-            <div className="flex items-center space-x-3 pb-2 border-b border-purple-900/40">
+            <div className="flex items-center space-x-3 pb-3 border-b border-purple-900/40">
               <button 
                 onClick={() => setCurrentScreenIndex(0)}
-                className="p-2.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 text-purple-200 hover:text-white"
+                className="p-2 sm:p-2.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 text-purple-200 hover:text-white active:scale-95 transition shrink-0"
+                title="Voltar para o Início"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h2 className="text-lg sm:text-xl font-black text-white">Todas as Cartinhas de Natal</h2>
-                <p className="text-xs text-purple-300">
-                  {publicChildren.length} crianças aprovadas para apadrinhamento (de um total de 18 acolhidos pelo projeto)
-                </p>
+                <h2 className="text-base sm:text-xl font-black text-white">Todas as Crianças</h2>
+                <span className="text-[10px] sm:text-xs font-bold text-amber-300 uppercase tracking-wider block">
+                  {publicChildren.length} CADASTRADAS
+                </span>
               </div>
             </div>
 
@@ -900,6 +922,7 @@ export default function App() {
               onSponsorChild={handleSponsorChild}
               onZoomImage={setZoomedImage}
               getAgeDisplay={getAgeDisplay}
+              isHome={false}
             />
           </div>
         )}
@@ -1154,39 +1177,43 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== ADMIN DASHBOARD ==================== */}
+        {/* ==================== ADMIN DASHBOARD (MATCHING SCREENSHOTS 1 & 5) ==================== */}
         {currentScreenObj.id === 'admin_dashboard' && (
           <div className="space-y-5 w-full animate-in fade-in duration-300">
             <div className="flex items-center justify-between pb-3 border-b border-purple-900/40">
               <div className="flex items-center space-x-3">
                 <button 
-                  onClick={() => setCurrentScreenIndex(0)}
-                  className="p-2.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 text-purple-200 hover:text-white"
+                  type="button"
+                  onClick={() => setIsAdminDrawerOpen(true)}
+                  className="p-2 sm:p-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-black font-black shadow-lg active:scale-95 transition"
+                  title="Abrir Menu de Gestão"
                 >
-                  <ArrowLeft className="w-5 h-5" />
+                  <Menu className="w-5 h-5 text-black" />
                 </button>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-black text-white">Painel de Gestão Seguro</h2>
-                  <p className="text-xs text-amber-300 font-bold">{adminTitle} · {adminName}</p>
+                  <h2 className="text-base sm:text-lg font-black text-white">Painel de Gestão</h2>
+                  <p className="text-[10px] sm:text-xs text-amber-300 font-bold">Controle Oficial do Lar Esperança</p>
                 </div>
               </div>
 
               <div className="flex items-center space-x-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setCameraTarget('gallery');
                     setIsLiveCameraOpen(true);
                   }}
-                  className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-pink-600 to-amber-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow"
+                  className="py-2 px-3 sm:px-3.5 rounded-xl bg-gradient-to-r from-pink-600 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-bold text-xs flex items-center space-x-1.5 shadow active:scale-95 transition"
                 >
                   <Camera className="w-4 h-4" />
                   <span>Câmera</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setCurrentScreenIndex(0)}
-                  className="py-2 px-3.5 rounded-xl bg-[#221038] hover:bg-[#311650] text-purple-200 text-xs font-bold border border-purple-500/30"
+                  className="py-2 px-3 sm:px-3.5 rounded-xl bg-[#221038] hover:bg-[#311650] text-purple-200 hover:text-white text-xs font-bold border border-purple-500/30 active:scale-95 transition"
                 >
-                  Sair do Painel
+                  Início
                 </button>
               </div>
             </div>
@@ -1588,69 +1615,56 @@ export default function App() {
 
       </main>
 
-      {/* Bottom Fixed Navigation Bar (Mobile & Tablet) */}
+      {/* Bottom Fixed Navigation Bar (Mobile & Tablet - Matching Screenshot 6: Início, Padrinho, Família, Doação) */}
       {currentScreenObj.id !== 'admin_dashboard' && (
-        <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#140824]/95 backdrop-blur-xl border-t border-purple-500/25 px-2 py-2 sm:py-2.5 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
-          <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
+        <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#140824]/95 backdrop-blur-xl border-t border-purple-500/25 px-3 py-2 sm:py-2.5 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+          <div className="max-w-lg mx-auto grid grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => setCurrentScreenIndex(0)}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-2xl transition active:scale-95 min-h-[48px] ${
                 currentScreenIndex === 0
-                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  ? 'text-pink-400 font-black bg-pink-500/15 shadow-inner'
                   : 'text-purple-300 hover:text-white'
               }`}
             >
               <Home className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-bold truncate">Início</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentScreenIndex(8)}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
-                currentScreenIndex === 8
-                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
-                  : 'text-purple-300 hover:text-white'
-              }`}
-            >
-              <Heart className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-bold truncate">Cartinhas</span>
+              <span className="text-[11px] font-bold truncate">Início</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentScreenIndex(5)}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-2xl transition active:scale-95 min-h-[48px] ${
                 currentScreenIndex === 5
-                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  ? 'text-pink-400 font-black bg-pink-500/15 shadow-inner'
                   : 'text-purple-300 hover:text-white'
               }`}
             >
               <User className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-bold truncate">Padrinho</span>
+              <span className="text-[11px] font-bold truncate">Padrinho</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentScreenIndex(4)}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-2xl transition active:scale-95 min-h-[48px] ${
                 currentScreenIndex === 4
-                  ? 'text-pink-400 font-extrabold bg-pink-500/15 shadow-inner'
+                  ? 'text-pink-400 font-black bg-pink-500/15 shadow-inner'
                   : 'text-purple-300 hover:text-white'
               }`}
             >
               <Users className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-bold truncate">Família</span>
+              <span className="text-[11px] font-bold truncate">Família</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsDonationModalOpen(true)}
-              className="flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl bg-gradient-to-r from-pink-600 to-amber-500 text-white font-black shadow-lg shadow-pink-900/40 active:scale-95 transition"
+              className="flex flex-col items-center justify-center py-2 px-2 rounded-2xl bg-gradient-to-r from-pink-600 to-amber-500 text-white font-black shadow-lg shadow-pink-900/40 active:scale-95 transition min-h-[48px]"
             >
               <Gift className="w-5 h-5 mb-1 text-white" />
-              <span className="text-[10px] font-black truncate">Doação</span>
+              <span className="text-[11px] font-black truncate">Doação</span>
             </button>
           </div>
         </nav>
@@ -2129,6 +2143,278 @@ export default function App() {
               >
                 <ShieldCheck className="w-4 h-4 text-amber-200" />
                 <span>Painel de Gestão (Área Segura)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Menu Drawer (Matching Screenshot 2: Menu de Gestão) */}
+      {isAdminDrawerOpen && (
+        <div className="fixed inset-0 z-[150] flex">
+          <div 
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm cursor-pointer transition-opacity"
+            onClick={() => setIsAdminDrawerOpen(false)}
+          />
+          <div className="relative w-80 max-w-[85vw] bg-[#180E2B] h-full p-5 flex flex-col justify-between z-10 border-r border-amber-500/30 animate-in slide-in-from-left duration-200 overflow-y-auto">
+            <div className="space-y-4">
+              {/* Header with Admin Profile & Close button */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-purple-900/60">
+                <div className="flex items-center space-x-3">
+                  <div 
+                    className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-400 shadow-lg shrink-0 cursor-pointer"
+                    onClick={() => setZoomedImage(adminAvatar)}
+                  >
+                    <img src={adminAvatar} alt="Proprietária" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-amber-300">Menu de Gestão</h3>
+                    <span className="text-[10px] text-amber-200/80 font-bold block">Proprietária · Oficial</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsAdminDrawerOpen(false)}
+                  className="p-2 rounded-xl bg-[#2A1448] text-amber-300 hover:text-white transition active:scale-95"
+                  title="Fechar"
+                >
+                  <ChevronLeft className="w-5 h-5 text-amber-400" />
+                </button>
+              </div>
+
+              {/* Section 1: GESTÃO PRINCIPAL */}
+              <div className="space-y-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-amber-400 block px-1">
+                  GESTÃO PRINCIPAL
+                </span>
+                
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('dashboard'); setIsAdminDrawerOpen(false); }}
+                  className={`w-full p-3 rounded-2xl flex items-center justify-between text-xs font-bold border transition ${
+                    adminTab === 'dashboard' 
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-500/50 shadow' 
+                      : 'bg-[#221038] text-purple-200 border-purple-500/20 hover:border-amber-500/40'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span>Visão Geral & Métricas</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-amber-400/60" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('children'); setIsAdminDrawerOpen(false); }}
+                  className={`w-full p-3 rounded-2xl flex items-center justify-between text-xs font-bold border transition ${
+                    adminTab === 'children' 
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-500/50 shadow' 
+                      : 'bg-[#221038] text-purple-200 border-purple-500/20 hover:border-amber-500/40'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Users className="w-4 h-4 text-amber-400" />
+                    <span>Gerenciar Crianças</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 text-[10px] font-bold">
+                    {childrenList.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('padrinhos'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Heart className="w-4 h-4 text-pink-400" />
+                    <span>Padrinhos</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('familias'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>Famílias</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('gallery'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <ImageIcon className="w-4 h-4 text-blue-400" />
+                    <span>Galeria & Upload Liberado</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 text-[10px] font-bold">
+                    {galleryItems.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminDrawerOpen(false);
+                    setCameraTarget('gallery');
+                    setIsLiveCameraOpen(true);
+                  }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Camera className="w-4 h-4 text-pink-400" />
+                    <span>Câmera ao Vivo...</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-pink-500/30 text-pink-300 text-[9px] font-extrabold uppercase">
+                    AO VIVO
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('carousel'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Sparkles className="w-4 h-4 text-pink-400" />
+                    <span>Banners do Carrossel</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('media916'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Video className="w-4 h-4 text-blue-400" />
+                    <span>Mídias 9:16 (Reels)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+              </div>
+
+              {/* Section 2: FINANCEIRO & DOAÇÕES */}
+              <div className="space-y-1.5 pt-2 border-t border-purple-900/50">
+                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 block px-1">
+                  FINANCEIRO & DOAÇÕES
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('pix'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <QrCode className="w-4 h-4 text-emerald-400" />
+                    <span>Gestão PIX & Doações...</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 text-[10px] font-extrabold uppercase">
+                    PIX
+                  </span>
+                </button>
+              </div>
+
+              {/* Section 3: EXPERIÊNCIA & TEMAS */}
+              <div className="space-y-1.5 pt-2 border-t border-purple-900/50">
+                <span className="text-[9px] font-black uppercase tracking-wider text-pink-400 block px-1">
+                  EXPERIÊNCIA & TEMAS
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('evangelical'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <BookOpen className="w-4 h-4 text-amber-400" />
+                    <span>Luz Divina & Versículos</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('festive'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <PartyPopper className="w-4 h-4 text-pink-400" />
+                    <span>Clima Festivo (Natal & ...)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+              </div>
+
+              {/* Section 4: CONFIGURAÇÕES & SEGURANÇA */}
+              <div className="space-y-1.5 pt-2 border-t border-purple-900/50">
+                <span className="text-[9px] font-black uppercase tracking-wider text-purple-400 block px-1">
+                  CONFIGURAÇÕES & SEGURANÇA
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('security'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span>Segurança, Senha & Acesso...</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-400/60" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setAdminTab('profile'); setIsAdminDrawerOpen(false); }}
+                  className="w-full p-3 rounded-2xl bg-[#221038] hover:bg-[#2C1648] text-purple-200 border border-purple-500/20 flex items-center justify-between text-xs font-bold transition"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <span>Meu Perfil & Titularidade...</span>
+                  </div>
+                  <span className="text-amber-400 text-xs">👑</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Actions: Voltar para Tela Inicial & Sair do Sistema */}
+            <div className="pt-4 border-t border-purple-900/60 space-y-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdminDrawerOpen(false);
+                  setCurrentScreenIndex(0);
+                }}
+                className="w-full py-3 rounded-2xl bg-[#2E1844] hover:bg-[#3D1E5C] text-purple-200 font-extrabold text-xs flex items-center justify-center space-x-2 border border-purple-500/30 active:scale-95 transition"
+              >
+                <Home className="w-4 h-4 text-pink-400" />
+                <span>Voltar para a Tela Inicial</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await supabase.auth.signOut();
+                  } catch {}
+                  setIsSafePanelUnlocked(false);
+                  setIsAdminDrawerOpen(false);
+                  setCurrentScreenIndex(0);
+                  setNotification('Sessão encerrada com segurança.');
+                }}
+                className="w-full py-3 rounded-2xl bg-[#4A1525] hover:bg-[#601A30] text-rose-200 font-extrabold text-xs flex items-center justify-center space-x-2 border border-rose-500/30 active:scale-95 transition"
+              >
+                <LogOut className="w-4 h-4 text-rose-400" />
+                <span>Sair do Sistema</span>
               </button>
             </div>
           </div>
