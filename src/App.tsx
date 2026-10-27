@@ -1076,27 +1076,52 @@ export default function App() {
               </div>
             </div>
 
-            {/* Quick Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-4 rounded-2xl bg-[#1C0E33] border border-purple-500/30 shadow">
-                <span className="text-[10px] text-purple-300 uppercase font-bold block">Total Crianças</span>
-                <span className="text-2xl font-black text-white mt-1 block">{childrenList.length}</span>
+            {/* Status de Conexão Supabase */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-[#18261F] to-[#122019] border border-emerald-500/40 text-xs text-emerald-200 flex items-center justify-between shadow-lg">
+              <div className="flex items-center space-x-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <div>
+                  <span className="font-black text-white text-xs block">Conexão Supabase 100% Ativa (Conta 2)</span>
+                  <span className="text-[10px] text-emerald-300">
+                    URL: utrpckrchcbqgzbhvlzy.supabase.co · Chave Pública (Anon) Conectada
+                  </span>
+                </div>
               </div>
-              <div className="p-4 rounded-2xl bg-[#1C0E33] border border-emerald-500/40 shadow">
-                <span className="text-[10px] text-emerald-300 uppercase font-bold block">Apadrinhadas</span>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/40 shrink-0">
+                Online
+              </span>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 shadow">
+                <span className="text-[9px] text-purple-300 uppercase font-bold block">Crianças (kids)</span>
+                <span className="text-2xl font-black text-white mt-1 block">{childrenList.length}</span>
+                <span className="text-[9px] text-purple-400">no banco Supabase</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-pink-500/40 shadow">
+                <span className="text-[9px] text-pink-300 uppercase font-bold block">Perfis Cadastrados</span>
+                <span className="text-2xl font-black text-pink-400 mt-1 block">{profilesList.length}</span>
+                <span className="text-[9px] text-pink-300/70">Padrinhos & Famílias</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-emerald-500/40 shadow">
+                <span className="text-[9px] text-emerald-300 uppercase font-bold block">Apadrinhadas</span>
                 <span className="text-2xl font-black text-emerald-400 mt-1 block">
                   {childrenList.filter(c => c.status === 'Apadrinhado').length}
                 </span>
+                <span className="text-[9px] text-emerald-300/70">com padrinho ativo</span>
               </div>
-              <div className="p-4 rounded-2xl bg-[#1C0E33] border border-amber-500/40 shadow">
-                <span className="text-[10px] text-amber-300 uppercase font-bold block">Aguardando</span>
+              <div className="p-3.5 rounded-2xl bg-[#1C0E33] border border-amber-500/40 shadow">
+                <span className="text-[9px] text-amber-300 uppercase font-bold block">Aguardando</span>
                 <span className="text-2xl font-black text-amber-400 mt-1 block">
                   {childrenList.filter(c => c.status === 'Aguardando Apadrinhamento').length}
                 </span>
+                <span className="text-[9px] text-amber-300/70">esperando acolhida</span>
               </div>
-              <div className="p-4 rounded-2xl bg-[#1C0E33] border border-pink-500/40 shadow">
-                <span className="text-[10px] text-pink-300 uppercase font-bold block">Galeria</span>
-                <span className="text-2xl font-black text-pink-400 mt-1 block">{galleryItems.length} mídias</span>
+              <div className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-[#1C0E33] border border-purple-500/30 shadow">
+                <span className="text-[9px] text-purple-300 uppercase font-bold block">Galeria</span>
+                <span className="text-2xl font-black text-white mt-1 block">{galleryItems.length}</span>
+                <span className="text-[9px] text-purple-400">fotos & mídias</span>
               </div>
             </div>
 

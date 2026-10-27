@@ -336,6 +336,20 @@ export const INITIAL_CHILDREN: Child[] = [
     wishlist: [{ name: 'Roupa Tam P e Sandália 31/32', price: 80 }]
   },
   {
+    id: '2b90b2f2-a6ba-4baa-a581-2f2618530079',
+    family_id: DEFAULT_ADMIN_PROFILE_ID,
+    name: 'Nathan Gabriel',
+    age: 0,
+    gender: 'Menino',
+    status: 'Aguardando Apadrinhamento',
+    likes: 'enxoval de bebê, fraldas',
+    dream: 'itens de enxoval de bebê e carinho da comunidade',
+    address: 'Lar Esperança',
+    image: 'https://utrpckrchcbqgzbhvlzy.supabase.co/storage/v1/object/public/media/ab0ffd20-0846-44c0-9660-b79b6a3015f3/ol37mfhh4dyist.jpg',
+    letter: 'Esperando o Nosso Príncipe Nathan Gabriel! O nosso pequeno milagre nasce em março e já é a nossa maior bênção! Estamos arrecadando doações para o enxoval do Nathan. Toda ajuda será recebida com muito amor!',
+    wishlist: [{ name: 'Itens para Enxoval de Bebê', price: 80 }]
+  },
+  {
     id: '1f1fa052-9a50-4d6e-839c-b189fdc1e0bd',
     family_id: DEFAULT_ADMIN_PROFILE_ID,
     name: 'Thanischa',
@@ -350,6 +364,20 @@ export const INITIAL_CHILDREN: Child[] = [
     shoeSize: '31/32',
     clothesSize: '8 anos',
     wishlist: [{ name: 'Roupa Tam 8 anos, Sandália 31/32 e Brinquedo', price: 80 }]
+  },
+  {
+    id: 'f030c850-21d6-4da6-81e0-7141d66bfbf2',
+    family_id: DEFAULT_ADMIN_PROFILE_ID,
+    name: 'Nova criança',
+    age: 5,
+    gender: 'Infantil',
+    status: 'Aguardando Apadrinhamento',
+    likes: 'brinquedos e festas',
+    dream: 'ter um Natal feliz',
+    address: 'Lar Esperança',
+    image: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=400&h=400&fit=crop',
+    letter: 'Querido Papai Noel, gostaria de ter um Natal iluminado com a minha família no Lar Esperança!',
+    wishlist: [{ name: 'Presente de Natal', price: 80 }]
   }
 ];
 
